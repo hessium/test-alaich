@@ -1,101 +1,151 @@
-import {useEffect, useState} from "react";
+import {useCallback, useEffect, useMemo, useState} from "react";
 import {useDocumentTitle} from "../shared/hooks/use-document-title.js";
 import {apiRequest} from "../shared/api/api.js";
-import Modal from "../shared/ui/modal/modal.jsx";
-import {Button} from "../shared/ui/button/button.jsx";
+import {Loader} from "../shared/ui/loader/loader.jsx";
+import {Button, Dialog, DialogContent, DialogContentText, DialogTitle} from "@mui/material";
 
 export default function Profile() {
     useDocumentTitle('Profile');
 
-    const [userInfo, setUserInfo] = useState(null);
-    const [combinedData, setCombinedData] = useState(JSON.parse(localStorage.getItem('combined-data')));
+    const [state, setState] = useState({
+        userInfo: null,
+        combinedData: JSON.parse(localStorage.getItem('combined-data')),
+        error: null,
+        isLoading: false,
+        isModalOpen: false,
+        fetchStatus: { author: false, quote: false },
+        token: JSON.parse(localStorage.getItem('authToken')).token || null
+    });
+
     const [controller, setController] = useState(null);
-    const [error, setError] = useState(null);
-    const [loading, setLoading] = useState(false);
-    const [isModalOpen, setIsModalOpen] = useState(false);
 
-    const [completeFetchAuthor, setCompleteFetchAuthor] = useState(false);
-    const [completeFetchQuote, setCompleteFetchQuote] = useState(false);
-
-
-    const user = JSON.parse(localStorage.getItem('user'));
-    const token = user?.token;
-
-    const fetchCombinedData = async (signal) => {
-        setCompleteFetchAuthor(false);
-        setCompleteFetchQuote(false);
-
+    const fetchCombinedData = useCallback(async (signal) => {
         try {
+            setState(prev => {
+                return ({...prev, fetchStatus: {author: false, quote: false}});
+            });
+
             const authorData = await apiRequest('GET',
-                `/author?token=${token}`,
+                `/author?token=${state.token}`,
                 null,
                 {},
                 signal);
-            setCompleteFetchAuthor(true);
+            setState(prev => ({
+                ...prev,
+                fetchStatus: { author: true, quote: false },
+            }));
 
             const quoteData = await apiRequest('GET',
-                `/quote?token=${token}&authorId=${authorData.data.authorId}`,
+                `/quote?token=${state.token}&authorId=${authorData.data.authorId}`,
                 null,
                 {},
                 signal);
-            setCompleteFetchQuote(true);
+            setState(prev => ({
+                ...prev,
+                fetchStatus: { author: true, quote: true },
+            }));
 
             const merged = {...authorData.data, ...quoteData.data}
-            setCombinedData(merged);
+
+            setState(prev => ({
+                ...prev,
+                combinedData: merged,
+                isModalOpen: false
+            }));
             localStorage.setItem('combined-data', JSON.stringify(merged))
-            setIsModalOpen(false);
         } catch (err) {
-            setIsModalOpen(false);
+            setState(prev => ({
+                ...prev,
+                isModalOpen: false
+            }));
             if (err.name !== 'AbortError') {
                 console.log(err)
             }
         }
-    };
+    }, [state.token]);
 
-    const handleCancel = () => {
-        if (controller) {
-            controller.abort();
-            setLoading(false);
-            setIsModalOpen(false);
-        }
-    };
 
-    const startFetchingData = () => {
-        if (!token) {
-            setError('Authorization token is missing');
+    const handleCancel = useCallback(() => {
+        controller?.abort();
+        setState(prev =>
+            ({...prev, isModalOpen: false }));
+    }, [controller]);
+
+    const startFetchingData = useCallback(() => {
+        if (!state.token) {
+            setState(prev =>
+                ({...prev, error: 'Authorization token missing' }));
             return;
         }
-
         const abortController = new AbortController();
         setController(abortController);
-        setIsModalOpen(true);
+        setState(prev =>
+            ({...prev, isModalOpen: true }));
         fetchCombinedData(abortController.signal);
-    };
+    }, [state.token, fetchCombinedData]);
 
     useEffect(() => {
+        let isMounted = true;
         const fetchUser = async () => {
             try {
-                setLoading(true);
-                const response = await apiRequest('GET', `/profile?token=${token}`);
-
-                if (!response.success) {
-                    throw new Error(response.data || 'Failed to load profile');
+                setState(prev => ({...prev, isLoading: true }));
+                const response = await apiRequest('GET', `/profile?token=${state.token}`);
+                if (isMounted) {
+                    setState(prev => ({...prev, userInfo: response.data, isLoading: false }));
                 }
-
-                setUserInfo(response.data);
             } catch (err) {
-                setError(err.message);
-            } finally {
-                setLoading(false);
+                if (isMounted) setState(prev => ({...prev, error: err.message, isLoading: false }));
             }
         };
 
-        fetchUser()
-    }, [token]);
+        fetchUser();
+        return () => { isMounted = false };
+    }, [state.token]);
 
-    if (!token) return <div>Please login to view this page</div>;
-    if (loading) return <div>Loading...</div>;
-    if (error) return <div>Error: {error}</div>;
+    const modalContent = useMemo(() => (
+        <Dialog
+            maxWidth="xl"
+            fullWidth
+            open={state.isModalOpen}
+            onClose={() =>
+                setState(prev =>
+                    ({...prev, isModalOpen: false }))}
+            aria-describedby="alert-dialog-description"
+        >
+            <DialogTitle
+                sx={{
+                    fontSize: 32,
+                }}
+                id="alert-dialog-title" >
+                {"Requesting the quote"}
+            </DialogTitle>
+            <DialogContent >
+                <DialogContentText sx={{display:"flex", flexDirection: 'column', gap: '20px', fontSize: '20px'}} id="alert-dialog-description">
+                    <div>
+                        Step 1: Requesting author...
+                        {state.fetchStatus.author ? ' Completed' : ''}
+                    </div>
+
+                    <div className=''>
+                        Step 2: Requesting quote...
+                        {state.fetchStatus.quote ? ' Completed' : ''}
+                    </div>
+                </DialogContentText>
+
+                <Button
+                    variant="contained"
+                    sx={{marginTop: '40px'}}
+                    onClick={handleCancel}>
+                    Cancel
+                </Button>
+            </DialogContent>
+        </Dialog>
+
+    ), [handleCancel, state.fetchStatus.author, state.fetchStatus.quote, state.isModalOpen]);
+
+
+    if (state.isLoading) return <Loader />;
+    if (state.error) return <div>Error: {state.error}</div>;
 
     return (
         <div className='profile'>
@@ -106,50 +156,27 @@ export default function Profile() {
 
                 <div>
                     <h1 className='profile__name'>
-                        Welcome, {userInfo?.fullname || 'User'}
+                        Welcome, {state.userInfo?.fullname || 'User'}
                     </h1>
+
                     <Button
+                        variant="contained"
                         onClick={startFetchingData}
-                        disabled={loading}
+                        disabled={state.isLoading}
                     >
-                       Update
+                        Update
                     </Button>
+
                 </div>
             </div>
 
-            {combinedData && (
+            {state.combinedData && (
                 <div className='profile__row'>
-                   <h3 className='profile__author'>{combinedData.name}:</h3>  <span>{ combinedData.quote}</span>
+                   <h3 className='profile__author'>{state.combinedData.name}:</h3>  <span>{ state.combinedData.quote}</span>
                 </div>
             )}
 
-            <Modal
-                isOpen={isModalOpen}
-                maxWidth="800px"
-                maxHeight="90vh"
-                hideCloseBtn
-                animationDuration={200}
-                onClose={() => setIsModalOpen(false)}
-            >
-                <h2>Requesting the quote</h2>
-
-                <div>
-                    Step 1: Requesting author...
-                    {completeFetchAuthor ? ' Completed' : ''}
-                </div>
-
-                <div>
-                    Step 2: Requesting quote...
-                    {completeFetchQuote ? ' Completed' : ''}
-                </div>
-
-                <Button
-                    classList={'fit-content'}
-                    onClick={handleCancel}
-                >
-                    Cancel
-                </Button>
-            </Modal>
+            {modalContent}
         </div>
     );
 }

@@ -33,6 +33,7 @@ export const apiRequest = async (
         return response.status !== 204 ? await response.json() : null;
     } catch (error) {
         if (error.name !== 'AbortError') {
+
             console.error('API request failed:', error);
         }
         throw error;

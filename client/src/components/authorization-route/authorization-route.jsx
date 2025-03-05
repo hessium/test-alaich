@@ -2,7 +2,7 @@ import { Navigate } from 'react-router-dom';
 import {useAuth} from "../../contexts/AuthContext.jsx";
 
 export default function AuthorizationRoute({ children }) {
-    const { user } = useAuth();
+    const { authToken } = useAuth();
 
-    return user ? <Navigate to="/profile" replace /> : children;
+    return authToken ? <Navigate to="/profile" replace /> : children;
 }
