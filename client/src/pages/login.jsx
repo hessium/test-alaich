@@ -22,7 +22,7 @@ export default function Login() {
         setFormState(prev => ({
             ...prev,
             [field]: e.target.value,
-            error: '' // Сбрасываем ошибку при изменении поля
+            error: ''
         }));
     }, []);
 
