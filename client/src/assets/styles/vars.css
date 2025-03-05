@@ -1,0 +1,10 @@
+:root {
+    --container-width: 1920px;
+    --container-padding: 4vw;
+
+    --color-primary: #3d3dff;
+    --color-secondary: white;
+    --color-grey: grey;
+    --color-black: black;
+    --color-red: red;
+}

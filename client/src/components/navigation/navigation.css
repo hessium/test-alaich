@@ -1,0 +1,20 @@
+.navigation {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 2rem 0;
+}
+
+.navigation__list {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.navigation__link {
+    display: inline-block;
+    padding: .5rem 2rem;
+    border-radius: .3rem;
+    border: 1px solid var(--color-black);
+}
