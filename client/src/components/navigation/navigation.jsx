@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import {useAuth} from "../../contexts/AuthContext.jsx";
 
 export default function Navigation() {
-    const { user, logout } = useAuth();
+    const { authToken, logout } = useAuth();
 
     return (
         <nav className='navigation'>
@@ -11,7 +11,7 @@ export default function Navigation() {
                 <li className='navigation__item'>
                     <Link className='navigation__link' to="/">About us</Link>
                 </li>
-                {user ? (
+                {authToken ? (
                     <>
                         <li className='navigation__item'>
                             <Link className='navigation__link' to="/profile">Profile</Link>
@@ -22,7 +22,7 @@ export default function Navigation() {
                     </>
                 ) : (
                     <li className='navigation__item'>
-                        <Link className='navigation__link' to="/login">Sing in</Link>
+                        <Link className='navigation__link' to="/login">Sign in</Link>
                     </li>
                 )}
             </ul>

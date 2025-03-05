@@ -1,85 +1,96 @@
 import {useDocumentTitle} from "../shared/hooks/use-document-title.js";
 import {useAuth} from "../contexts/AuthContext.jsx";
-import {useEffect, useState} from "react";
+import {useCallback, useState} from "react";
 import {apiRequest} from "../shared/api/api.js";
 import {useNavigate} from "react-router-dom";
-import {cn} from "../shared/utils/cn.js";
 import {Button} from "../shared/ui/button/button.jsx";
 import {InputField} from "../shared/ui/input-field/input-field.jsx";
+import {EMAIL_REGEX} from "../shared/constants/regex.js";
 
 export default function Login() {
-    useDocumentTitle('Sign in')
-
+    useDocumentTitle('Sign in');
     const { login } = useAuth();
     const navigate = useNavigate();
 
-    const [formData, setFormData] = useState({
+    const [formState, setFormState] = useState({
         email: '',
         password: '',
+        error: '',
+        isLoading: false
     });
-    const [error, setError] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
 
-    useEffect(() => {
-        setError('');
-    }, [formData.email, formData.password]);
+    const handleInputChange = useCallback((field) => (e) => {
+        setFormState(prev => ({
+            ...prev,
+            [field]: e.target.value,
+            error: ''
+        }));
+    }, []);
 
-    const handleInputChange = (field) => (e) => {
-        setFormData(prev => ({ ...prev, [field]: e.target.value }));
-    };
+    const validateForm = useCallback(() => {
+        const { email, password } = formState;
 
-    const validateForm = () => {
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-        if (!formData.email || !formData.password) {
-            setError('All fields are required');
+        if (!email || !password) {
+            setFormState(prev => ({ ...prev, error: 'All fields are required' }));
             return false;
         }
 
-        if (!emailRegex.test(formData.email)) {
-            setError('Invalid email format');
+        if (!EMAIL_REGEX.test(email)) {
+            setFormState(prev => ({ ...prev, error: 'Invalid email format' }));
             return false;
         }
 
         return true;
-    };
+    }, [formState.email, formState.password]);
 
-    const handleSubmit = async (e) => {
+    const handleSubmit = useCallback(async (e) => {
         e.preventDefault();
         if (!validateForm()) return;
 
-        setIsLoading(true);
+        setFormState(prev => ({ ...prev, isLoading: true }));
+
         try {
-            const data = await apiRequest('POST', '/login', formData);
+            const data = await apiRequest('POST', '/login', {
+                email: formState.email,
+                password: formState.password
+            });
 
             if (!data.success) {
-                setError(data.message || 'Authentication failed');
+                setFormState(prev => ({
+                    ...prev,
+                    error: data.message || 'Authentication failed',
+                    isLoading: false
+                }));
                 return;
             }
 
             login({ token: data.data.token });
-            navigate('/profile');
+            navigate('/profile')
         } catch (err) {
-            setError(err.message || 'An error occurred during login');
-        } finally {
-            setIsLoading(false);
+            setFormState(prev => ({
+                ...prev,
+                error: err.message || 'An error occurred during login',
+                isLoading: false
+            }));
         }
-    };
+    }, [formState.email, formState.password, login, navigate, validateForm]);
 
     return (
         <div>
-            {error && <div className="form__error">{error}</div>}
+            {formState.error && (
+                <div className="form__error">{formState.error}</div>
+            )}
 
             <form className="form"  onSubmit={handleSubmit}>
                 <InputField
                     type="email"
                     id="email"
-                    label="Email address"
+                    label="Email"
                     placeholder="Enter email"
-                    value={formData.email}
+                    value={formState.email}
                     onChange={handleInputChange('email')}
                     warning="We'll never share your email with anyone else"
-                    disabled={isLoading}
+                    disabled={formState.isLoading}
                 />
 
                 <InputField
@@ -87,13 +98,13 @@ export default function Login() {
                     id="password"
                     label="Password"
                     placeholder="Password"
-                    value={formData.password}
+                    value={formState.password}
                     onChange={handleInputChange('password')}
-                    disabled={isLoading}
+                    disabled={formState.isLoading}
                 />
 
 
-                <Button type='submit' loading={isLoading} >
+                <Button type='submit' loading={formState.isLoading} >
                     Submit
                 </Button>
             </form>
